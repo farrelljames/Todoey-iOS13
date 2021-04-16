@@ -8,9 +8,9 @@
 
 import UIKit
 import RealmSwift
-import SwipeCellKit
+import ChameleonFramework
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController {
     
     var categoryArray: Results<Category>?
     let realm = try! Realm()
@@ -23,11 +23,9 @@ class CategoryViewController: UITableViewController {
         // setup Category list
         loadCategories()
     }
-}
-
-//MARK: - Data Manipulation Methods
-
-extension CategoryViewController {
+    
+    //MARK: - Data Manipulation Methods
+    
     func save(category: Category) {
         do {
             try realm.write({
@@ -43,6 +41,26 @@ extension CategoryViewController {
         categoryArray = realm.objects(Category.self)
         
         tableView.reloadData()
+    }
+    
+    override func updateModel(at indexPath: IndexPath) {
+        guard let categoryForDeletion = self.categoryArray?[indexPath.row] else {
+            return
+        }
+        
+        do {
+            try self.realm.write({
+                let items = categoryForDeletion.items
+                
+                for item in items {
+                    self.realm.delete(item)
+                }
+                
+                self.realm.delete(categoryForDeletion)
+            })
+        } catch {
+            print("Error when deleting \(error)")
+        }
     }
 }
 
@@ -82,6 +100,7 @@ extension CategoryViewController {
             
             let newCategory = Category()
             newCategory.name = categoryName
+            newCategory.colourHex = UIColor.randomFlat().hexValue()
             
             //Adding to User defaults
             //self.defaults.set(self.todoItems, forKey: "ToDoListArray")
@@ -96,40 +115,7 @@ extension CategoryViewController {
 
 // MARK: - Table view data source
 
-extension CategoryViewController: SwipeTableViewCellDelegate {
-    func tableView(_ tableView: UITableView, editActionsForRowAt indexPath: IndexPath, for orientation: SwipeActionsOrientation) -> [SwipeAction]? {
-        guard orientation == .right else { return nil }
-        
-        let deleteAction = SwipeAction(style: .destructive, title: "Delete") { (action, indexPath) in
-            
-            guard let categoryForDeletion = self.categoryArray?[indexPath.row] else {
-                return
-            }
-            
-            do {
-                try self.realm.write({
-                    let items = categoryForDeletion.items
-                    
-                    for item in items {
-                        self.realm.delete(item)
-                    }
-        
-                    self.realm.delete(categoryForDeletion)
-                })
-            } catch {
-                print("Error when deleting \(error)")
-            }
-        }
-        
-        return [deleteAction]
-    }
-    
-    func tableView(_ tableView: UITableView, editActionsOptionsForRowAt indexPath: IndexPath, for orientation: SwipeActionsOrientation) -> SwipeOptions {
-        var options = SwipeOptions()
-        options.expansionStyle = .destructive
-        return options
-    }
-    
+extension CategoryViewController {
     override func numberOfSections(in tableView: UITableView) -> Int {
         return 1
     }
@@ -139,10 +125,15 @@ extension CategoryViewController: SwipeTableViewCellDelegate {
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoCategoryCell", for: indexPath) as! SwipeTableViewCell
-        cell.delegate = self
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         
-        cell.textLabel?.text = categoryArray?[indexPath.row].name ?? "No categories added yet"
+        if let category = categoryArray?[indexPath.row] {
+            cell.textLabel?.text = category.name
+            cell.backgroundColor = UIColor(hexString: category.colourHex)
+        } else {
+            cell.textLabel?.text = "No categories added yet"
+            cell.backgroundColor = UIColor(hexString: "#FFFFFF")
+        }
         
         return cell
     }
